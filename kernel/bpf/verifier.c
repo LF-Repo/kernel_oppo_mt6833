@@ -2119,7 +2119,23 @@ static int sanitize_ptr_alu(struct bpf_verifier_env *env,
 	alu_state |= ptr_is_dst_reg ?
 		     BPF_ALU_SANITIZE_SRC : BPF_ALU_SANITIZE_DST;
 
-	if (retrieve_ptr_limit(ptr_reg, &alu_limit, opcode, off_is_neg))
+	err = retrieve_ptr_limit(ptr_reg, &alu_limit, opcode, off_is_neg);
+	if (err < 0)
+		return err;
+
+	err = update_alu_sanitation_state(aux, alu_state, alu_limit);
+	if (err < 0)
+		return err;
+do_sim:
+	/* If we're in commit phase, we're done here given we already
+	 * pushed the truncated dst_reg into the speculative verification
+	 * stack.
+	 *
+	 * Also, when register is a known constant, we rewrite register-based
+	 * operation to immediate-based, and thus do not need masking (and as
+	 * a consequence, do not need to simulate the zero-truncation either).
+	 */
+	if (commit_window || off_is_imm)
 		return 0;
 	if (update_alu_sanitation_state(aux, alu_state, alu_limit))
 		return -EACCES;
@@ -2215,7 +2231,7 @@ static int adjust_ptr_min_max_vals(struct bpf_verifier_env *env,
 	case BPF_ADD:
 		ret = sanitize_ptr_alu(env, insn, ptr_reg, dst_reg, smin_val < 0);
 		if (ret < 0) {
-			verbose("R%d tried to add from different maps or paths\n", dst);
+			verbose("R%d tried to add from different maps, paths, or prohibited types\n", dst);
 			return ret;
 		}
 		/* We can take a fixed offset as long as it doesn't overflow
@@ -2270,7 +2286,7 @@ static int adjust_ptr_min_max_vals(struct bpf_verifier_env *env,
 	case BPF_SUB:
 		ret = sanitize_ptr_alu(env, insn, ptr_reg, dst_reg, smin_val < 0);
 		if (ret < 0) {
-			verbose("R%d tried to sub from different maps or paths\n", dst);
+			verbose("R%d tried to sub from different maps, paths, or prohibited types\n", dst);
 			return ret;
 		}
 		if (dst_reg == off_reg) {
