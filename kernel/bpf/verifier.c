@@ -2759,7 +2759,7 @@ static int adjust_reg_min_max_vals(struct bpf_verifier_env *env,
 				/* Combining two pointers by any ALU op yields
 				 * an arbitrary scalar.
 				 */
-				if (opcode == BPF_SUB){
+				if (opcode == BPF_SUB && env->allow_ptr_leaks) {
 					mark_reg_unknown(regs, insn->dst_reg);
 					return 0;
 				}
