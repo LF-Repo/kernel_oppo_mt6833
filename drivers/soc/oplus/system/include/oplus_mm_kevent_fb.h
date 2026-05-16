@@ -13,7 +13,9 @@
 #ifndef _OPLUS_MM_KEVENT_FB_
 #define _OPLUS_MM_KEVENT_FB_
 
-#define MM_KEVENT_MAX_PAYLOAD_SIZE	256
+#define MAX_PAYLOAD_DATASIZE		 (512)
+#define MM_KEVENT_MAX_PAYLOAD_SIZE	 MAX_PAYLOAD_DATASIZE
+#define MAX_FUNC_LINE_SIZE	         (128)
 
 enum {
 	MM_FB_KEY_RATELIMIT_NONE = 0,
@@ -23,6 +25,7 @@ enum {
 	MM_FB_KEY_RATELIMIT_1H = MM_FB_KEY_RATELIMIT_30MIN * 2,
 	MM_FB_KEY_RATELIMIT_1DAY = MM_FB_KEY_RATELIMIT_1H * 24,
 };
+#define FEEDBACK_DELAY_60S                       60
 
 #define OPLUS_FB_ADSP_CRASH_RATELIMIT    (60 * 5 * 1000) /*ms, for mtk*/
 
@@ -48,13 +51,22 @@ enum OPLUS_MM_DIRVER_FB_EVENT_MODULE {
 int upload_mm_fb_kevent_to_atlas_limit(unsigned int event_id, unsigned char *payload, int limit_ms);
 
 int upload_mm_fb_kevent_limit(enum OPLUS_MM_DIRVER_FB_EVENT_MODULE module,  unsigned int event_id,
-			 const char *name, int rate_limit_ms, char *payload);
+			 const char *name, int rate_limit_ms, unsigned int delay_s, char *payload);
+
+#define mm_fb_audio_kevent_named_delay(event_id, rate_limit_ms, delay_s, fmt, ...) \
+do { \
+	char name[MAX_PAYLOAD_DATASIZE] = ""; \
+	char kv_data[MAX_PAYLOAD_DATASIZE] = ""; \
+	scnprintf(name, sizeof(name), "%s:%d", __func__, __LINE__); \
+	scnprintf(kv_data, sizeof(kv_data), fmt, ##__VA_ARGS__); \
+	upload_mm_fb_kevent_limit(OPLUS_MM_DIRVER_FB_EVENT_AUDIO, event_id, name, rate_limit_ms, delay_s, kv_data); \
+} while (0)
 
 #define mm_fb_kevent(m, id, name, rate_limit_ms, fmt, ...) \
 	do { \
-		char kv_data[MM_KEVENT_MAX_PAYLOAD_SIZE] = ""; \
+		char kv_data[MAX_PAYLOAD_DATASIZE] = ""; \
 		scnprintf(kv_data, sizeof(kv_data), fmt, ##__VA_ARGS__); \
-		upload_mm_fb_kevent_limit(m, id, name, rate_limit_ms, kv_data); \
+		upload_mm_fb_kevent_limit(m, id, name, rate_limit_ms, 0, kv_data); \
 	} while (0)
 
 #define mm_fb_display_kevent(name, rate_limit_ms, fmt, ...) \
@@ -62,7 +74,7 @@ int upload_mm_fb_kevent_limit(enum OPLUS_MM_DIRVER_FB_EVENT_MODULE module,  unsi
 
 #define mm_fb_display_kevent_named(rate_limit_ms, fmt, ...) \
 	do { \
-		char name[MM_KEVENT_MAX_PAYLOAD_SIZE]; \
+		char name[MAX_FUNC_LINE_SIZE]; \
 		scnprintf(name, sizeof(name), "%s:%d", __func__, __LINE__); \
 		mm_fb_display_kevent(name, rate_limit_ms, fmt, ##__VA_ARGS__); \
 	} while (0)
@@ -72,7 +84,7 @@ int upload_mm_fb_kevent_limit(enum OPLUS_MM_DIRVER_FB_EVENT_MODULE module,  unsi
 
 #define mm_fb_audio_kevent_named(event_id, rate_limit_ms, fmt, ...) \
 	do { \
-		char name[MM_KEVENT_MAX_PAYLOAD_SIZE]; \
+		char name[MAX_FUNC_LINE_SIZE]; \
 		scnprintf(name, sizeof(name), "%s:%d", __func__, __LINE__); \
 		mm_fb_audio_kevent(event_id, name, rate_limit_ms, fmt, ##__VA_ARGS__); \
 	} while (0)

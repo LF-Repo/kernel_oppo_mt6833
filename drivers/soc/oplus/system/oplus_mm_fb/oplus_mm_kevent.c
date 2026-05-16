@@ -30,8 +30,7 @@ static spinlock_t mm_slock;
 static mm_kevent_recv_user_func mm_fb_kevent_recv_fb = NULL;
 
 /* record connect pid and modules*/
-void mm_fb_kevent_add_module(u32 pid, char *module)
-{
+void mm_fb_kevent_add_module(u32 pid, char* module) {
 	int i	= 0x0;
 	int len = 0x0;
 
@@ -40,10 +39,8 @@ void mm_fb_kevent_add_module(u32 pid, char *module)
 	}
 
 	len = strlen(module);
-
 	if (len > (MM_KEVENT_MODULE_LEN_MAX - 1)) {
-		pr_err("mm_kevent: module len is larger than %d error\n",
-		       MM_KEVENT_MODULE_LEN_MAX);
+		pr_err("mm_kevent: module len is larger than %d error\n", MM_KEVENT_MODULE_LEN_MAX);
 		return;
 	}
 
@@ -62,8 +59,7 @@ void mm_fb_kevent_add_module(u32 pid, char *module)
 }
 
 /* record connect pid and modules*/
-int mm_fb_kevent_get_pid(char *module)
-{
+int mm_fb_kevent_get_pid(char* module) {
 	int i = 0;
 
 	if (!module) {
@@ -80,7 +76,7 @@ int mm_fb_kevent_get_pid(char *module)
 }
 
 static int mm_fb_kevent_send_module(struct sk_buff *skb,
-				    struct genl_info *info)
+	struct genl_info *info)
 {
 	struct sk_buff *skbu = NULL;
 	struct nlmsghdr *nlh;
@@ -95,7 +91,6 @@ static int mm_fb_kevent_send_module(struct sk_buff *skb,
 	}
 
 	skbu = skb_get(skb);
-
 	if (!skbu) {
 		pr_err("mm_kevent: skb_get result is null error\n");
 		return -1;
@@ -104,13 +99,12 @@ static int mm_fb_kevent_send_module(struct sk_buff *skb,
 	if (info->attrs[MM_FB_CMD_ATTR_MSG]) {
 		na = info->attrs[MM_FB_CMD_ATTR_MSG];
 		nlh = nlmsg_hdr(skbu);
-		pmesg = (char *)kmalloc(nla_len(na) + 0x10, GFP_KERNEL);
-
+		pmesg = (char*)kmalloc(nla_len(na) + 0x10, GFP_KERNEL);
 		if (pmesg) {
 			memcpy(pmesg, nla_data(na), nla_len(na));
 			pmesg[nla_len(na)] = 0x0;
 			pr_info("mm_kevent: nla_len(na) %d, pid %d, module: %s\n",
-				nla_len(na), nlh->nlmsg_pid, pmesg);
+					nla_len(na), nlh->nlmsg_pid, pmesg);
 			mm_fb_kevent_add_module(nlh->nlmsg_pid, pmesg);
 		}
 	}
@@ -118,7 +112,6 @@ static int mm_fb_kevent_send_module(struct sk_buff *skb,
 	if (pmesg) {
 		kfree(pmesg);
 	}
-
 	if (skbu) {
 		kfree_skb(skbu);
 	}
@@ -126,15 +119,14 @@ static int mm_fb_kevent_send_module(struct sk_buff *skb,
 	return 0;
 }
 
-void mm_fb_kevent_set_recv_user(mm_kevent_recv_user_func recv_func)
-{
+void mm_fb_kevent_set_recv_user(mm_kevent_recv_user_func recv_func) {
 	mm_fb_kevent_recv_fb = recv_func;
 }
 
 EXPORT_SYMBOL(mm_fb_kevent_set_recv_user);
 
 static int mm_fb_kevent_test_upload(struct sk_buff *skb,
-				    struct genl_info *info)
+	struct genl_info *info)
 {
 	struct sk_buff *skbu = NULL;
 	struct nlattr *na = NULL;
@@ -148,7 +140,6 @@ static int mm_fb_kevent_test_upload(struct sk_buff *skb,
 	}
 
 	skbu = skb_get(skb);
-
 	if (!skbu) {
 		pr_err("mm_kevent: skb_get result is null error\n");
 		return -1;
@@ -156,21 +147,18 @@ static int mm_fb_kevent_test_upload(struct sk_buff *skb,
 
 	if (info->attrs[MM_FB_CMD_ATTR_MSG]) {
 		na = info->attrs[MM_FB_CMD_ATTR_MSG];
-		pr_info("mm_kevent: nla_len(na) is %d, data= %s\n", nla_len(na),
-			(char *)nla_data(na));
+		pr_info("mm_kevent: nla_len(na) is %d, data= %s\n", nla_len(na), (char *)nla_data(na));
 
 		if (nla_len(na) > OPLUS_MM_MSG_TO_KERNEL_BUF_LEN) {
 			pr_err("mm_kevent: message len %d too long error\n", nla_len(na));
 			return -1;
 		}
 
-		pmesg = (char *)kmalloc(nla_len(na) + 0x10, GFP_KERNEL);
-
+		pmesg = (char*)kmalloc(nla_len(na) + 0x10, GFP_KERNEL);
 		if (!pmesg) {
 			pr_err("mm_kevent: kmalloc return null error\n");
 			return -1;
 		}
-
 		memcpy(pmesg, nla_data(na), nla_len(na));
 		pmesg[nla_len(na)] = 0x0;
 
@@ -217,7 +205,7 @@ static struct genl_family mm_fb_genl_family __ro_after_init = {
 };
 
 static inline int genl_msg_prepare_usr_msg(unsigned char cmd, size_t size,
-		pid_t pid, struct sk_buff **skbp)
+	pid_t pid, struct sk_buff **skbp)
 {
 	struct sk_buff *skb;
 
@@ -237,7 +225,7 @@ static inline int genl_msg_prepare_usr_msg(unsigned char cmd, size_t size,
 }
 
 static inline int genl_msg_mk_usr_msg(struct sk_buff *skb, int type, void *data,
-				      int len)
+	int len)
 {
 	int ret = 0;
 
@@ -248,12 +236,11 @@ static inline int genl_msg_mk_usr_msg(struct sk_buff *skb, int type, void *data,
 }
 
 /* send to user space */
-int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo)
-{
+int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo) {
 	int ret;
 	int size_use;
 	struct sk_buff *skbuff;
-	void *head;
+	void * head;
 	int pid;
 
 	if (!mm_kevent_init_flag) {
@@ -268,7 +255,6 @@ int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo)
 	}
 
 	pid = mm_fb_kevent_get_pid(userinfo->tag);
-
 	if (pid == MM_KEVENT_BAD_VALUE) {
 		pr_err("mm_kevent: tag=%s get pid error\n", userinfo->tag);
 		return MM_KEVENT_BAD_VALUE;
@@ -276,14 +262,12 @@ int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo)
 
 	size_use = sizeof(struct mm_kevent_packet) + userinfo->len;
 	ret = genl_msg_prepare_usr_msg(MM_FB_CMD_GENL_UPLOAD, size_use, pid, &skbuff);
-
 	if (ret) {
 		pr_err("mm_kevent: genl_msg_prepare_usr_msg error, ret is %d \n", ret);
 		return ret;
 	}
 
 	ret = genl_msg_mk_usr_msg(skbuff, MM_FB_CMD_ATTR_MSG, userinfo, size_use);
-
 	if (ret) {
 		pr_err("mm_kevent: genl_msg_mk_usr_msg error, ret is %d \n", ret);
 		kfree_skb(skbuff);
@@ -294,7 +278,6 @@ int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo)
 	genlmsg_end(skbuff, head);
 
 	ret = genlmsg_unicast(&init_net, skbuff, pid);
-
 	if (ret < 0) {
 		pr_err("mm_kevent: genlmsg_unicast fail=%d \n", ret);
 		return MM_KEVENT_BAD_VALUE;
@@ -304,19 +287,14 @@ int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo)
 }
 EXPORT_SYMBOL(mm_fb_kevent_send_to_user);
 
-int __init mm_fb_kevent_module_init(void)
-{
+int __init mm_fb_kevent_module_init(void) {
 	int ret;
 	ret = genl_register_family(&mm_fb_genl_family);
-
 	if (ret) {
-		pr_err("mm_kevent: genl_register_family:%s error,ret = %d\n", MM_FB_FAMILY,
-		       ret);
+		pr_err("mm_kevent: genl_register_family:%s error,ret = %d\n", MM_FB_FAMILY, ret);
 		return ret;
-
 	} else {
-		pr_info("mm_kevent: genl_register_family complete, id = %d!\n",
-			mm_fb_genl_family.id);
+		pr_info("mm_kevent: genl_register_family complete, id = %d!\n", mm_fb_genl_family.id);
 	}
 
 	spin_lock_init(&mm_slock);
@@ -327,8 +305,7 @@ int __init mm_fb_kevent_module_init(void)
 	return MM_KEVENT_NO_ERROR;
 }
 
-void __exit mm_fb_kevent_module_exit(void)
-{
+void __exit mm_fb_kevent_module_exit(void) {
 	genl_unregister_family(&mm_fb_genl_family);
 	mm_kevent_init_flag = false;
 	pr_info("mm_kevent: exit\n");

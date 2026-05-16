@@ -29,6 +29,7 @@
 #define MM_KEVENT_BAD_VALUE 		 (-1)
 #define MM_KEVENT_NO_ERROR			 (0)
 
+//#define OPLUS_NETLINK_MM_KEVENT_TEST
 #define OPLUS_NETLINK_MM_DBG_LV1     0x1
 #define OPLUS_NETLINK_MM_DBG_LV2     0x2
 
@@ -45,7 +46,7 @@ struct mm_kevent_module {
 	char modl[MM_KEVENT_MODULE_LEN_MAX];
 };
 
-typedef void (*mm_kevent_recv_user_func)(int type, int flags, char *data);
+typedef void (*mm_kevent_recv_user_func)(int type, int flags, char* data);
 
 struct mm_kevent_packet {
 	int  type;							/* 0:warrning,1:error,2:hw error*/
@@ -53,20 +54,14 @@ struct mm_kevent_packet {
 	char event_id[MAX_PAYLOAD_EVENTID]; /* eventID */
 	size_t len; 						/* Length of packet data */
 	unsigned char data[0];				/* Optional packet data */
-} __attribute__((packed));
+}__attribute__((packed));
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
 int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo);
 void mm_fb_kevent_set_recv_user(mm_kevent_recv_user_func recv_func);
-#else /*CONFIG_OPLUS_FEATURE_MM_FEEDBACK*/
-int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo)
-{
-	return 0;
-}
-void mm_fb_kevent_set_recv_user(mm_kevent_recv_user_func recv_func)
-{
-	return;
-}
-#endif /*CONFIG_OPLUS_FEATURE_MM_FEEDBACK*/
-#endif  /*_OPLUS_MM_KEVENT_*/
+#else //CONFIG_OPLUS_FEATURE_MM_FEEDBACK
+int mm_fb_kevent_send_to_user(struct mm_kevent_packet *userinfo) {return 0;}
+void mm_fb_kevent_set_recv_user(mm_kevent_recv_user_func recv_func) {return;}
+#endif //CONFIG_OPLUS_FEATURE_MM_FEEDBACK
+#endif  //_OPLUS_MM_KEVENT_
 
