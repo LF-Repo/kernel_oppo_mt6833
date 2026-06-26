@@ -143,7 +143,7 @@ jobs:
             if [ -n "$url" ]; then
               echo "应用: $url"
               wget -O bpf.patch "$url" || { echo "下载失败，继续下一个"; continue; }
-              patch -p1 < bpf.patch || { echo "补丁应用失败，跳过继续"; }
+              patch -p1 -f --fuzz=3 < bpf.patch || { echo "补丁应用失败，跳过继续"; }
               rm -f bpf.patch
             fi
           done < $GITHUB_WORKSPACE/bpfpatch.txt
