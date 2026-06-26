@@ -131,22 +131,7 @@ jobs:
           echo "CONFIG_VHOST_NET=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "CONFIG_VHOST_CROSS_ENDIAN_LEGACY=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
-      - name: 应用 BPF 补丁
-        if: inputs.enable_bpf == true
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          if [ ! -f $GITHUB_WORKSPACE/bpfpatch.txt ]; then
-            echo "警告：bpfpatch.txt 不存在，跳过 BPF 补丁应用"
-            exit 0
-          fi
-          while IFS= read -r url; do
-            if [ -n "$url" ]; then
-              echo "应用: $url"
-              wget -O bpf.patch "$url" || { echo "下载失败，继续下一个"; continue; }
-              patch -p1 -f --fuzz=3 < bpf.patch || { echo "补丁应用失败，跳过继续"; }
-              rm -f bpf.patch
-            fi
-          done < $GITHUB_WORKSPACE/bpfpatch.txt
+
 
       - name: 清理 BPF 补丁引入的重复定义
         if: inputs.enable_bpf == true
