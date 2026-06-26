@@ -19,7 +19,7 @@ on:
         default: false
         type: boolean
       enable_bpf:
-        description: '应用 BPF 补丁（需要 bpfpatch.txt 文件）'
+        description: 'BPF修复'
         required: false
         default: false
         type: boolean
@@ -138,6 +138,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
 
+          # ---------- 原有清理（保留） ----------
           # 1. kernel.h: 删声明，保留定义
           sed -i '/^u32 int_sqrt64(u64 x);$/d' include/linux/kernel.h
 
@@ -153,7 +154,34 @@ jobs:
           # 4. bpf/core.c: 添加缺失的声明
           sed -i '/^long bpf_jit_limit.*__read_mostly;$/a\static u64 bpf_jit_limit_max;' kernel/bpf/core.c
 
-          echo "BPF 补丁清理完成"
+          # ---------- 新增 BPF verifier 修复 ----------
+          # 5. 在 verifier.c 插入 REASON_* 枚举（放在 #include 之后）
+          sed -i '/^#include <linux\/stringify.h>/a\
+          \
+          /* REASON_* for sanitize_ptr_alu */\
+          enum {\
+          	REASON_BOUNDS,\
+          	REASON_TYPE,\
+          	REASON_PATHS,\
+          	REASON_LIMIT,\
+          	REASON_STACK,\
+          };' kernel/bpf/verifier.c
+
+          # 6. 在 bpf_verifier.h 插入 BPF_ALU_IMMEDIATE 宏
+          sed -i '/^#define BPF_ALU_SANITIZE[[:space:]]*(.*)$/a\
+          #define BPF_ALU_IMMEDIATE		(1U << 4)' include/linux/bpf_verifier.h
+
+          # 7. 在 sanitize_ptr_alu 函数中声明 int err（在第一个大括号后插入）
+          sed -i '/^static int sanitize_ptr_alu/,/^{/ {
+              /^{/ a\
+              \	int err;
+          }' kernel/bpf/verifier.c
+
+          # 8. （可选）若遇到 do_sim 标签重复，可将其重命名（此处留作安全保险）
+          # 将函数内所有 goto do_sim; 和 do_sim: 改为 do_sim_sanitize:
+          # sed -i 's/\<do_sim\>/do_sim_sanitize/g' kernel/bpf/verifier.c
+
+          echo "BPF 补丁清理完成（含 verifier 修复）"
 
       - name: 开始编译内核
         run: |
