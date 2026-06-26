@@ -148,6 +148,40 @@ jobs:
             fi
           done < $GITHUB_WORKSPACE/bpfpatch.txt
 
+      - name: 清理 BPF 补丁引入的重复定义
+        if: inputs.enable_bpf == true
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          # 1. 修复 kernel.h: 删除重复的 int_sqrt64 定义（保留第一个，删第二个）
+          sed -i '/^static inline u32 int_sqrt64(u64 x)$/,/^}/{ 
+            /^static inline u32 int_sqrt64(u64 x)$/!{ 
+              /^}/!d 
+            } 
+          }' include/linux/kernel.h
+          # 如果 kernel.h 里 int_sqrt64 出现了两次定义，直接修复
+          # 删除从第495行附近的重复 int_sqrt64（如果存在）
+          awk '
+          /^static inline u32 int_sqrt64/ { count++; if(count==2) { skip=1; next } }
+          skip && /^}/ { skip=0; next }
+          !skip
+          ' include/linux/kernel.h > include/linux/kernel.h.tmp && mv include/linux/kernel.h.tmp include/linux/kernel.h
+          # 2. 修复 list_lru.h: 删除重复的 rcu 成员
+          awk '
+          /struct rcu_head[[:space:]]*rcu/ { count++; if(count==2) next }
+          1
+          ' include/linux/list_lru.h > include/linux/list_lru.h.tmp && mv include/linux/list_lru.h.tmp include/linux/list_lru.h
+          # 3. 修复 vmpressure.h: 删除重复的 stall, users, users_lock
+          awk '
+          /unsigned long stall/ { count1++; if(count1==2) next }
+          /atomic_long_t users/ { count2++; if(count2==2) next }
+          /rwlock_t users_lock/ { count3++; if(count3==2) next }
+          1
+          ' include/linux/vmpressure.h > include/linux/vmpressure.h.tmp && mv include/linux/vmpressure.h.tmp include/linux/vmpressure.h
+          # 4. 修复 bpf/core.c: 添加缺失的 bpf_jit_limit_max 声明
+          sed -i '/^long bpf_jit_limit.*__read_mostly;$/a\static u64 bpf_jit_limit_max;' kernel/bpf/core.c
+
+          echo "BPF 补丁清理完成"
+
       - name: 开始编译内核
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
