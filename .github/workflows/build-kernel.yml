@@ -131,8 +131,6 @@ jobs:
           echo "CONFIG_VHOST_NET=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "CONFIG_VHOST_CROSS_ENDIAN_LEGACY=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
-
-
       - name: 清理 BPF 补丁引入的重复定义
         if: inputs.enable_bpf == true
         run: |
@@ -154,8 +152,9 @@ jobs:
           # 4. bpf/core.c: 添加缺失的声明
           sed -i '/^long bpf_jit_limit.*__read_mostly;$/a\static u64 bpf_jit_limit_max;' kernel/bpf/core.c
 
-          # ---------- 新增 BPF verifier 修复 ----------
-          # 5. 在 verifier.c 插入 REASON_* 枚举（放在 #include 之后）
+          # ---------- 新增 BPF verifier 修复（增强版） ----------
+          # 5. 在 verifier.c 插入 REASON_* 枚举（如果未定义）
+          grep -q "REASON_BOUNDS" kernel/bpf/verifier.c || \
           sed -i '/^#include <linux\/stringify.h>/a\
           \
           /* REASON_* for sanitize_ptr_alu */\
@@ -167,21 +166,29 @@ jobs:
           	REASON_STACK,\
           };' kernel/bpf/verifier.c
 
-          # 6. 在 bpf_verifier.h 插入 BPF_ALU_IMMEDIATE 宏
-          sed -i '/^#define BPF_ALU_SANITIZE[[:space:]]*(.*)$/a\
-          #define BPF_ALU_IMMEDIATE		(1U << 4)' include/linux/bpf_verifier.h
+          # 6. 在 verifier.c 中直接定义 BPF_ALU_IMMEDIATE（确保可见）
+          grep -q "BPF_ALU_IMMEDIATE" kernel/bpf/verifier.c || \
+          sed -i '/^#include <linux\/stringify.h>/a\
+          #define BPF_ALU_IMMEDIATE		(1U << 4)' kernel/bpf/verifier.c
 
-          # 7. 在 sanitize_ptr_alu 函数中声明 int err（在第一个大括号后插入）
-          sed -i '/^static int sanitize_ptr_alu/,/^{/ {
+          # 7. 重命名 do_sim 标签避免重复
+          sed -i 's/\<do_sim\>/do_sim_sanitize/g' kernel/bpf/verifier.c
+
+          # 8. 在 adjust_ptr_min_max_vals 函数中添加 dst/src 变量声明
+          #    查找函数定义开始，在第一个 { 后插入
+          sed -i '/^static int adjust_ptr_min_max_vals/,/^{/ {
               /^{/ a\
-              \	int err;
+              \	u32 dst = insn->dst_reg;\
+              \	u32 src = insn->src_reg;
           }' kernel/bpf/verifier.c
 
-          # 8. （可选）若遇到 do_sim 标签重复，可将其重命名（此处留作安全保险）
-          # 将函数内所有 goto do_sim; 和 do_sim: 改为 do_sim_sanitize:
-          # sed -i 's/\<do_sim\>/do_sim_sanitize/g' kernel/bpf/verifier.c
+          # 9. 在 fixup_bpf_calls 中添加 isimm 变量定义
+          #    在 aux = ... 之后，if (!aux->alu_state) 之前插入
+          sed -i '/aux = &env->insn_aux_data\[i + delta\];/a\
+          \		bool isimm = aux->alu_state & BPF_ALU_IMMEDIATE;' kernel/bpf/verifier.c
 
-          echo "BPF 补丁清理完成（含 verifier 修复）"
+          echo "BPF 补丁清理完成（含 verifier 增强修复）"
+
 
       - name: 开始编译内核
         run: |
