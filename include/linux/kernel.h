@@ -480,9 +480,17 @@ extern int func_ptr_is_kernel_text(void *ptr);
 
 unsigned long int_sqrt(unsigned long);
 
+/*
 #if BITS_PER_LONG < 64
 u32 int_sqrt64(u64 x);
 #else
+static inline u32 int_sqrt64(u64 x)
+{
+	return (u32)int_sqrt(x);
+}
+#endif
+*/
+#if BITS_PER_LONG < 64
 static inline u32 int_sqrt64(u64 x)
 {
 	return (u32)int_sqrt(x);
