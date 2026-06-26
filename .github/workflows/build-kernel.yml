@@ -157,19 +157,14 @@ jobs:
           sed -i '/^u32 int_sqrt64(u64 x);$/d' include/linux/kernel.h
 
           # 2. list_lru.h: 删除第二个 struct rcu_head rcu
-          #    方法：找到所有 struct rcu_head rcu，保留第一个，删后面的
           awk '
           /struct rcu_head[[:space:]]*rcu/ { if(++c>1) next }
           1
           ' include/linux/list_lru.h > tmp && mv tmp include/linux/list_lru.h
 
-          # 3. vmpressure.h: 删除重复的 stall, users, users_lock
-          awk '
-          /unsigned long stall/ { if(++c1>1) next }
-          /atomic_long_t users/ { if(++c2>1) next }
-          /rwlock_t users_lock/ { if(++c3>1) next }
-          1
-          ' include/linux/vmpressure.h > tmp && mv tmp include/linux/vmpressure.h
+          # 3. vmpressure.h: 直接恢复补丁前的原始版本
+          git checkout -- include/linux/vmpressure.h
+
           # 4. bpf/core.c: 添加缺失的声明
           sed -i '/^long bpf_jit_limit.*__read_mostly;$/a\static u64 bpf_jit_limit_max;' kernel/bpf/core.c
 
