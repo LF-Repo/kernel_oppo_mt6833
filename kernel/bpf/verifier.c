@@ -21,6 +21,15 @@
 #include <linux/vmalloc.h>
 #include <linux/stringify.h>
 
+enum {
+    REASON_BOUNDS = -1,
+    REASON_TYPE   = -2,
+    REASON_PATHS  = -3,
+    REASON_LIMIT  = -4,
+    REASON_STACK  = -5,
+};
+
+
 /* bpf_check() is a static code analyzer that walks eBPF program
  * instruction by instruction and updates register/stack state.
  * All paths of conditional branches are analyzed until 'bpf_exit' insn.
@@ -2115,6 +2124,7 @@ static int sanitize_ptr_alu(struct bpf_verifier_env *env,
 	u8 opcode = BPF_OP(insn->code);
 	u32 alu_state, alu_limit;
 	struct bpf_reg_state tmp;
+	int err;   // <-- 添加此行
 	bool ret;
 
 	if (can_skip_alu_sanitation(env, insn))
@@ -2169,7 +2179,6 @@ do_sim:
 		return 0;
 	if (update_alu_sanitation_state(aux, alu_state, alu_limit))
 		return -EACCES;
-do_sim:
 	/* Simulate and find potential out-of-bounds access under
 	 * speculative execution from truncation as a result of
 	 * masking when off was not within expected range. If off
@@ -4901,6 +4910,10 @@ static int fixup_bpf_calls(struct bpf_verifier_env *env)
 				BPF_ALU_SANITIZE_SRC;
 
 			off_reg = issrc ? insn->src_reg : insn->dst_reg;
+			/* ========== 新增下面这一行 ========== */
+			bool isimm = aux->alu_state & BPF_ALU_IMMEDIATE;
+			/* =================================== */
+
 			if (isimm) {
 				*patch++ = BPF_MOV32_IMM(BPF_REG_AX, aux->alu_limit);
 			} else {
