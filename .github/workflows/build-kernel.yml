@@ -1,4 +1,4 @@
-name: 编译内核（可配置 KernelSU / LXC-Docker / KVM / BPF）
+name: 编译内核（可配置 KernelSU / LXC-Docker / KVM）
 
 on:
   workflow_dispatch:
@@ -15,11 +15,6 @@ on:
         type: boolean
       enable_kvm:
         description: '启用 KVM 支持'
-        required: false
-        default: false
-        type: boolean
-      enable_bpf:
-        description: 'BPF修复'
         required: false
         default: false
         type: boolean
@@ -64,12 +59,14 @@ jobs:
           key: build-kernel-oppo-mt6833
           max-size: 2G
 
+      # ========== KernelSU 相关 ==========
       - name: KernelSU - 应用 legacy patch
         if: inputs.enable_kernelsu == true
         run: |
+          echo "KSU_LOG: 开始下载并应用 RKSU 官方 4.14 patch"
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          wget https://github.com/rksuorg/kernel_patches/raw/master/manual_hook/kernel-4.14.patch -O ksu-4.14.patch
-          patch -p1 < ksu-4.14.patch
+          wget https://github.com/rksuorg/kernel_patches/raw/master/manual_hook/kernel-4.14.patch -O ksu-4.14.patch || { echo "下载 patch 失败"; exit 1; }
+          patch -p1 < ksu-4.14.patch || { echo "patch 应用失败"; cat ksu-4.14.patch; exit 1; }
 
       - name: KernelSU - 植入 KSU 核心
         if: inputs.enable_kernelsu == true
@@ -78,6 +75,7 @@ jobs:
           rm -rf KernelSU
           curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash
 
+      # ========== LXC / Docker 支持 ==========
       - name: LXC/Docker - 开启内核配置
         if: inputs.enable_lxc_docker == true
         run: |
@@ -122,6 +120,7 @@ jobs:
           sed -i '/CONFIG_ANDROID_PARANOID_NETWORK/d' android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "# CONFIG_ANDROID_PARANOID_NETWORK is not set" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
+      # ========== KVM 支持 ==========
       - name: KVM - 开启配置
         if: inputs.enable_kvm == true
         run: |
@@ -131,138 +130,14 @@ jobs:
           echo "CONFIG_VHOST_NET=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "CONFIG_VHOST_CROSS_ENDIAN_LEGACY=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
-      - name: 清理 BPF 补丁引入的重复定义
-        if: inputs.enable_bpf == true
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-
-
-          # ---------- 创建并应用修复补丁 ----------
-          cat > fix-bpf-verifier.patch <<'EOF'
---- a/kernel/bpf/verifier.c
-+++ b/kernel/bpf/verifier.c
-@@ -1,3 +1,4 @@
-+
- /* Copyright (c) 2011-2014 PLUMgrid, http://plumgrid.com
-  * Copyright (c) 2016 Facebook
-  *
-@@ -30,6 +31,15 @@
- #include <linux/vmalloc.h>
- #include <linux/stringify.h>
- 
-+/* REASON_* for sanitize_ptr_alu */
-+enum {
-+	REASON_BOUNDS,
-+	REASON_TYPE,
-+	REASON_PATHS,
-+	REASON_LIMIT,
-+	REASON_STACK,
-+};
-+
- /* bpf_check() is a static code analyzer that walks eBPF program
-  * instruction by instruction and updates register/stack state.
-  * All paths of conditional branches are analyzed until 'bpf_exit' insn.
-@@ -1926,6 +1936,7 @@
- 	u32 alu_state, alu_limit;
- 	struct bpf_reg_state tmp;
- 	bool ret;
-+	int err;
- 
- 	if (can_skip_alu_sanitation(env, insn))
- 		return 0;
-@@ -1944,11 +1955,11 @@
- 		return REASON_BOUNDS;
- 
- 	info->mask_to_left = (opcode == BPF_ADD &&  off_is_neg) ||
--			     (opcode == BPF_SUB && !off_is_neg);
-+			     (opcode == BPF_SUB && !off_is_neg);
- 
- 	err = retrieve_ptr_limit(ptr_reg, &alu_limit, info->mask_to_left);
- 	if (err < 0)
--		return err;
-+		goto do_sim_sanitize;
- 
- 	if (commit_window) {
- 		/* In commit phase we narrow the masking window based on
-@@ -1968,15 +1979,10 @@
- 	err = update_alu_sanitation_state(aux, alu_state, alu_limit);
- 	if (err < 0)
- 		return err;
--do_sim:
--	/* If we're in commit phase, we're done here given we already
--	 * pushed the truncated dst_reg into the speculative verification
--	 * stack.
--	 *
--	 * Also, when register is a known constant, we rewrite register-based
--	 * operation to immediate-based, and thus do not need masking (and as
--	 * a consequence, do not need to simulate the zero-truncation either).
--	 */
-+	goto do_sim_sanitize;
-+
-+do_sim_sanitize:
-+	/* Simulate the effect of masking for speculative execution */
- 	if (commit_window || off_is_imm)
- 		return 0;
- 	if (update_alu_sanitation_state(aux, alu_state, alu_limit))
-@@ -2076,6 +2082,8 @@
- 	struct bpf_sanitize_info info = {};
- 	u8 opcode = BPF_OP(insn->code);
- 	int ret;
-+	u32 dst = insn->dst_reg;
-+	u32 src = insn->src_reg;
- 
- 	dst_reg = &regs[dst];
- 
-@@ -4890,6 +4898,8 @@
- 			u32 off_reg;
- 
- 			aux = &env->insn_aux_data[i + delta];
-+			bool isimm = aux->alu_state & BPF_ALU_IMMEDIATE;
-+
- 			if (!aux->alu_state ||
- 			    aux->alu_state == BPF_ALU_NON_POINTER)
- 				continue;
---- a/include/linux/bpf_verifier.h
-+++ b/include/linux/bpf_verifier.h
-@@ -13,6 +13,7 @@
- #define BPF_ALU_SANITIZE_SRC		1U
- #define BPF_ALU_SANITIZE_DST		2U
- #define BPF_ALU_NEG_VALUE		(1U << 2)
-+#define BPF_ALU_IMMEDIATE		(1U << 4)
- #define BPF_ALU_NON_POINTER		(1U << 3)
- #define BPF_ALU_SANITIZE		(BPF_ALU_SANITIZE_SRC | \
- 					 BPF_ALU_SANITIZE_DST)
-EOF
-
-          # 应用补丁
-          patch -p1 < fix-bpf-verifier.patch
-
-          # ---------- 其他原有清理（如果需要） ----------
-          # 1. kernel.h: 删声明，保留定义
-          sed -i '/^u32 int_sqrt64(u64 x);$/d' include/linux/kernel.h
-
-          # 2. list_lru.h: 删除第二个 struct rcu_head rcu
-          awk '
-          /struct rcu_head[[:space:]]*rcu/ { if(++c>1) next }
-          1
-          ' include/linux/list_lru.h > tmp && mv tmp include/linux/list_lru.h
-
-          # 3. vmpressure.h: 直接恢复补丁前的原始版本
-          git checkout -- include/linux/vmpressure.h
-
-          # 4. bpf/core.c: 添加缺失的声明
-          sed -i '/^long bpf_jit_limit.*__read_mostly;$/a\static u64 bpf_jit_limit_max;' kernel/bpf/core.c
-
-          echo "BPF 补丁清理完成（已应用 verifier 修复补丁）"
-
-
-
+      # ========== 编译内核 ==========
       - name: 开始编译内核
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
           export KBUILD_BUILD_HOST=AndroidDeveloper@Android.com
           export KBUILD_BUILD_USER=AndroidDeveloper
+          # 如果启用 LXC/Docker，额外添加 KCFLAGS 忽略特定警告
           if [ "${{ inputs.enable_lxc_docker }}" = "true" ]; then
             KCFLAGS_EXTRA="-Wno-error=sizeof-array-div"
           else
@@ -276,9 +151,11 @@ EOF
             LD=ld.lld \
             KCFLAGS="$KCFLAGS_EXTRA"
 
+      # ========== 打包 AnyKernel3 ==========
       - name: 制作 AnyKernel3 卡刷包
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
+          # 统一使用官方 osm0sis 的 AnyKernel3（若需更换源可在此调整）
           git clone https://github.com/osm0sis/AnyKernel3
           sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
           sed -i 's!block=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!block=auto;!g' AnyKernel3/anykernel.sh
