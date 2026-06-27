@@ -2289,6 +2289,8 @@ static int adjust_ptr_min_max_vals(struct bpf_verifier_env *env,
 	u64 umin_val = off_reg->umin_value, umax_val = off_reg->umax_value,
 	    umin_ptr = ptr_reg->umin_value, umax_ptr = ptr_reg->umax_value;
 	struct bpf_sanitize_info info = {};
+	u32 dst = insn->dst_reg;
+	u32 src = insn->src_reg;
 	u8 opcode = BPF_OP(insn->code);
 	int ret;
 
@@ -4898,7 +4900,8 @@ static int fixup_bpf_calls(struct bpf_verifier_env *env)
 			struct bpf_insn insn_buf[16];
 			struct bpf_insn *patch = &insn_buf[0];
 			bool issrc, isneg;
-			u32 off_reg;
+						bool isimm;
+u32 off_reg;
 
 			aux = &env->insn_aux_data[i + delta];
 			if (!aux->alu_state ||
@@ -4911,7 +4914,7 @@ static int fixup_bpf_calls(struct bpf_verifier_env *env)
 
 			off_reg = issrc ? insn->src_reg : insn->dst_reg;
 			/* ========== 新增下面这一行 ========== */
-			bool isimm = aux->alu_state & BPF_ALU_IMMEDIATE;
+			isimm = aux->alu_state & BPF_ALU_IMMEDIATE;
 			/* =================================== */
 
 			if (isimm) {
