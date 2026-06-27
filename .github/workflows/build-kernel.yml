@@ -131,7 +131,7 @@ jobs:
           echo "CONFIG_VHOST_NET=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "CONFIG_VHOST_CROSS_ENDIAN_LEGACY=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
-      - name- name: 清理 BPF 补丁引入的重复定义
+      - name: 清理 BPF 补丁引入的重复定义
         if: inputs.enable_bpf == true
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
