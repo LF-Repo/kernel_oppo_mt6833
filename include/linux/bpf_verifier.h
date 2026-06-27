@@ -120,6 +120,7 @@ struct bpf_verifier_state_list {
 #define BPF_ALU_NON_POINTER		(1U << 3)
 #define BPF_ALU_SANITIZE		(BPF_ALU_SANITIZE_SRC | \
 					 BPF_ALU_SANITIZE_DST)
+#define BPF_ALU_IMMEDIATE	(1U << 4)
 
 struct bpf_insn_aux_data {
 	union {
