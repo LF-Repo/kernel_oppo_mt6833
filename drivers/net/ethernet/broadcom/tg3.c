@@ -6430,58 +6430,66 @@ static void tg3_dump_legacy_regs(struct tg3 *tp, u32 *regs)
 
 static void tg3_dump_state(struct tg3 *tp)
 {
-	int i;
-	u32 *regs;
+    int i;
+    u32 *regs;
 
-	regs = kzalloc(TG3_REG_BLK_SIZE, GFP_ATOMIC);
-	if (!regs)
-		return;
+    /* If it is a PCI error, all registers will be 0xffff,
+     * we don't dump them out, just report the error and return
+     */
+    if (tp->pdev->error_state != pci_channel_io_normal) {
+        netdev_err(tp->dev, "PCI channel ERROR!\n");
+        return;
+    }
 
-	if (tg3_flag(tp, PCI_EXPRESS)) {
-		/* Read up to but not including private PCI registers */
-		for (i = 0; i < TG3_PCIE_TLDLPL_PORT; i += sizeof(u32))
-			regs[i / sizeof(u32)] = tr32(i);
-	} else
-		tg3_dump_legacy_regs(tp, regs);
+    regs = kzalloc(TG3_REG_BLK_SIZE, GFP_ATOMIC);
+    if (!regs)
+        return;
 
-	for (i = 0; i < TG3_REG_BLK_SIZE / sizeof(u32); i += 4) {
-		if (!regs[i + 0] && !regs[i + 1] &&
-		    !regs[i + 2] && !regs[i + 3])
-			continue;
+    if (tg3_flag(tp, PCI_EXPRESS)) {
+        /* Read up to but not including private PCI registers */
+        for (i = 0; i < TG3_PCIE_TLDLPL_PORT; i += sizeof(u32))
+            regs[i / sizeof(u32)] = tr32(i);
+    } else
+        tg3_dump_legacy_regs(tp, regs);
 
-		netdev_err(tp->dev, "0x%08x: 0x%08x, 0x%08x, 0x%08x, 0x%08x\n",
-			   i * 4,
-			   regs[i + 0], regs[i + 1], regs[i + 2], regs[i + 3]);
-	}
+    for (i = 0; i < TG3_REG_BLK_SIZE / sizeof(u32); i += 4) {
+        if (!regs[i + 0] && !regs[i + 1] &&
+            !regs[i + 2] && !regs[i + 3])
+            continue;
 
-	kfree(regs);
+        netdev_err(tp->dev, "0x%08x: 0x%08x, 0x%08x, 0x%08x, 0x%08x\n",
+               i * 4,
+               regs[i + 0], regs[i + 1], regs[i + 2], regs[i + 3]);
+    }
 
-	for (i = 0; i < tp->irq_cnt; i++) {
-		struct tg3_napi *tnapi = &tp->napi[i];
+    kfree(regs);
 
-		/* SW status block */
-		netdev_err(tp->dev,
-			 "%d: Host status block [%08x:%08x:(%04x:%04x:%04x):(%04x:%04x)]\n",
-			   i,
-			   tnapi->hw_status->status,
-			   tnapi->hw_status->status_tag,
-			   tnapi->hw_status->rx_jumbo_consumer,
-			   tnapi->hw_status->rx_consumer,
-			   tnapi->hw_status->rx_mini_consumer,
-			   tnapi->hw_status->idx[0].rx_producer,
-			   tnapi->hw_status->idx[0].tx_consumer);
+    for (i = 0; i < tp->irq_cnt; i++) {
+        struct tg3_napi *tnapi = &tp->napi[i];
 
-		netdev_err(tp->dev,
-		"%d: NAPI info [%08x:%08x:(%04x:%04x:%04x):%04x:(%04x:%04x:%04x:%04x)]\n",
-			   i,
-			   tnapi->last_tag, tnapi->last_irq_tag,
-			   tnapi->tx_prod, tnapi->tx_cons, tnapi->tx_pending,
-			   tnapi->rx_rcb_ptr,
-			   tnapi->prodring.rx_std_prod_idx,
-			   tnapi->prodring.rx_std_cons_idx,
-			   tnapi->prodring.rx_jmb_prod_idx,
-			   tnapi->prodring.rx_jmb_cons_idx);
-	}
+        /* SW status block */
+        netdev_err(tp->dev,
+             "%d: Host status block [%08x:%08x:(%04x:%04x:%04x):(%04x:%04x)]\n",
+               i,
+               tnapi->hw_status->status,
+               tnapi->hw_status->status_tag,
+               tnapi->hw_status->rx_jumbo_consumer,
+               tnapi->hw_status->rx_consumer,
+               tnapi->hw_status->rx_mini_consumer,
+               tnapi->hw_status->idx[0].rx_producer,
+               tnapi->hw_status->idx[0].tx_consumer);
+
+        netdev_err(tp->dev,
+        "%d: NAPI info [%08x:%08x:(%04x:%04x:%04x):%04x:(%04x:%04x:%04x:%04x)]\n",
+               i,
+               tnapi->last_tag, tnapi->last_irq_tag,
+               tnapi->tx_prod, tnapi->tx_cons, tnapi->tx_pending,
+               tnapi->rx_rcb_ptr,
+               tnapi->prodring.rx_std_prod_idx,
+               tnapi->prodring.rx_std_cons_idx,
+               tnapi->prodring.rx_jmb_prod_idx,
+               tnapi->prodring.rx_jmb_cons_idx);
+    }
 }
 
 /* This is called whenever we suspect that the system chipset is re-
@@ -11152,49 +11160,50 @@ static int tg3_restart_hw(struct tg3 *tp, bool reset_phy)
 
 static void tg3_reset_task(struct work_struct *work)
 {
-	struct tg3 *tp = container_of(work, struct tg3, reset_task);
-	int err;
+    struct tg3 *tp = container_of(work, struct tg3, reset_task);
+    int err;
 
-	rtnl_lock();
-	tg3_full_lock(tp, 0);
+    rtnl_lock();
+    tg3_full_lock(tp, 0);
 
-	if (!netif_running(tp->dev)) {
-		tg3_flag_clear(tp, RESET_TASK_PENDING);
-		tg3_full_unlock(tp);
-		rtnl_unlock();
-		return;
-	}
+    if (tp->pcierr_recovery || !netif_running(tp->dev) ||
+        tp->pdev->error_state != pci_channel_io_normal) {
+        tg3_flag_clear(tp, RESET_TASK_PENDING);
+        tg3_full_unlock(tp);
+        rtnl_unlock();
+        return;
+    }
 
-	tg3_full_unlock(tp);
+    tg3_full_unlock(tp);
 
-	tg3_phy_stop(tp);
+    tg3_phy_stop(tp);
 
-	tg3_netif_stop(tp);
+    tg3_netif_stop(tp);
 
-	tg3_full_lock(tp, 1);
+    tg3_full_lock(tp, 1);
 
-	if (tg3_flag(tp, TX_RECOVERY_PENDING)) {
-		tp->write32_tx_mbox = tg3_write32_tx_mbox;
-		tp->write32_rx_mbox = tg3_write_flush_reg32;
-		tg3_flag_set(tp, MBOX_WRITE_REORDER);
-		tg3_flag_clear(tp, TX_RECOVERY_PENDING);
-	}
+    if (tg3_flag(tp, TX_RECOVERY_PENDING)) {
+        tp->write32_tx_mbox = tg3_write32_tx_mbox;
+        tp->write32_rx_mbox = tg3_write_flush_reg32;
+        tg3_flag_set(tp, MBOX_WRITE_REORDER);
+        tg3_flag_clear(tp, TX_RECOVERY_PENDING);
+    }
 
-	tg3_halt(tp, RESET_KIND_SHUTDOWN, 0);
-	err = tg3_init_hw(tp, true);
-	if (err)
-		goto out;
+    tg3_halt(tp, RESET_KIND_SHUTDOWN, 0);
+    err = tg3_init_hw(tp, true);
+    if (err)
+        goto out;
 
-	tg3_netif_start(tp);
+    tg3_netif_start(tp);
 
 out:
-	tg3_full_unlock(tp);
+    tg3_full_unlock(tp);
 
-	if (!err)
-		tg3_phy_start(tp);
+    if (!err)
+        tg3_phy_start(tp);
 
-	tg3_flag_clear(tp, RESET_TASK_PENDING);
-	rtnl_unlock();
+    tg3_flag_clear(tp, RESET_TASK_PENDING);
+    rtnl_unlock();
 }
 
 static int tg3_request_irq(struct tg3 *tp, int irq_num)
