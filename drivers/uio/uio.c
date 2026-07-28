@@ -459,61 +459,58 @@ struct uio_listener {
 
 static int uio_open(struct inode *inode, struct file *filep)
 {
-	struct uio_device *idev;
-	struct uio_listener *listener;
-	int ret = 0;
+    struct uio_device *idev;
+    struct uio_listener *listener;
+    int ret = 0;
 
-	mutex_lock(&minor_lock);
-	idev = idr_find(&uio_idr, iminor(inode));
-	mutex_unlock(&minor_lock);
-	if (!idev) {
-		ret = -ENODEV;
-		goto out;
-	}
+    mutex_lock(&minor_lock);
+    idev = idr_find(&uio_idr, iminor(inode));
+    if (!idev) {
+        ret = -ENODEV;
+        mutex_unlock(&minor_lock);
+        goto out;
+    }
+    get_device(&idev->dev);
+    mutex_unlock(&minor_lock);
 
-	get_device(&idev->dev);
+    if (!try_module_get(idev->owner)) {
+        ret = -ENODEV;
+        goto err_module_get;
+    }
 
-	if (!try_module_get(idev->owner)) {
-		ret = -ENODEV;
-		goto err_module_get;
-	}
+    listener = kmalloc(sizeof(*listener), GFP_KERNEL);
+    if (!listener) {
+        ret = -ENOMEM;
+        goto err_alloc_listener;
+    }
 
-	listener = kmalloc(sizeof(*listener), GFP_KERNEL);
-	if (!listener) {
-		ret = -ENOMEM;
-		goto err_alloc_listener;
-	}
+    listener->dev = idev;
+    listener->event_count = atomic_read(&idev->event);
+    filep->private_data = listener;
 
-	listener->dev = idev;
-	listener->event_count = atomic_read(&idev->event);
-	filep->private_data = listener;
+    mutex_lock(&idev->info_lock);
+    if (!idev->info) {
+        mutex_unlock(&idev->info_lock);
+        ret = -EINVAL;
+        goto err_alloc_listener;
+    }
 
-	mutex_lock(&idev->info_lock);
-	if (!idev->info) {
-		mutex_unlock(&idev->info_lock);
-		ret = -EINVAL;
-		goto err_alloc_listener;
-	}
+    if (idev->info && idev->info->open)
+        ret = idev->info->open(idev->info, inode);
+    mutex_unlock(&idev->info_lock);
+    if (ret)
+        goto err_infoopen;
 
-	if (idev->info && idev->info->open)
-		ret = idev->info->open(idev->info, inode);
-	mutex_unlock(&idev->info_lock);
-	if (ret)
-		goto err_infoopen;
-
-	return 0;
+    return 0;
 
 err_infoopen:
-	kfree(listener);
-
+    kfree(listener);
 err_alloc_listener:
-	module_put(idev->owner);
-
+    module_put(idev->owner);
 err_module_get:
-	put_device(&idev->dev);
-
+    put_device(&idev->dev);
 out:
-	return ret;
+    return ret;
 }
 
 static int uio_fasync(int fd, struct file *filep, int on)
@@ -1002,27 +999,24 @@ EXPORT_SYMBOL_GPL(__uio_register_device);
  */
 void uio_unregister_device(struct uio_info *info)
 {
-	struct uio_device *idev;
+    struct uio_device *idev;
+    int minor;
 
-	if (!info || !info->uio_dev)
-		return;
+    if (!info || !info->uio_dev)
+        return;
 
-	idev = info->uio_dev;
+    idev = info->uio_dev;
+    minor = idev->minor;
 
-	uio_free_minor(idev);
+    mutex_lock(&idev->info_lock);
+    uio_dev_del_attributes(idev);
+    if (info->irq && info->irq != UIO_IRQ_CUSTOM)
+        free_irq(info->irq, idev);
+    idev->info = NULL;
+    mutex_unlock(&idev->info_lock);
 
-	mutex_lock(&idev->info_lock);
-	uio_dev_del_attributes(idev);
-
-	if (info->irq && info->irq != UIO_IRQ_CUSTOM)
-		free_irq(info->irq, idev);
-
-	idev->info = NULL;
-	mutex_unlock(&idev->info_lock);
-
-	device_unregister(&idev->dev);
-
-	return;
+    uio_free_minor(minor);
+    device_unregister(&idev->dev);
 }
 EXPORT_SYMBOL_GPL(uio_unregister_device);
 
