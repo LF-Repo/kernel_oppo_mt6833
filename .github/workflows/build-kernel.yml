@@ -68,7 +68,7 @@ jobs:
           wget https://github.com/rksuorg/kernel_patches/raw/master/manual_hook/kernel-4.14.patch -O ksu-4.14.patch || { echo "下载 patch 失败"; exit 1; }
           patch -p1 < ksu-4.14.patch || { echo "patch 应用失败"; cat ksu-4.14.patch; exit 1; }
 
-      - name: KernelSU - 植入 KSU 核心
+      - name: KernelSU - 植入 KSU
         if: inputs.enable_kernelsu == true
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
@@ -156,10 +156,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
           # 统一使用官方 osm0sis 的 AnyKernel3（若需更换源可在此调整）
-          git clone https://github.com/osm0sis/AnyKernel3
-          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
-          sed -i 's!block=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!block=auto;!g' AnyKernel3/anykernel.sh
-          sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' AnyKernel3/anykernel.sh
+          git clone https://github.com/sanba0519/AnyKernel3
           cp android-kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           rm -rf AnyKernel3/.git* AnyKernel3/README.md
 
@@ -169,8 +166,4 @@ jobs:
           name: AnyKernel.zip
           path: kernel_workspace/AnyKernel3/*
 
-      - name: 上传内核镜像
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-Image.gz
-          path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image.gz
+
