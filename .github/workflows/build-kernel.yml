@@ -155,8 +155,7 @@ jobs:
       - name: 制作 AnyKernel3 卡刷包
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
-          # 统一使用官方 osm0sis 的 AnyKernel3（若需更换源可在此调整）
-          git clone https://github.com/sanba0519/AnyKernel3
+          git clone -b general https://github.com/sanba0519/AnyKernel3
           cp android-kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           rm -rf AnyKernel3/.git* AnyKernel3/README.md
 
