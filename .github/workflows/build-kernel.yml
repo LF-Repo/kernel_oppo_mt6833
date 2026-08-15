@@ -9,7 +9,7 @@ on:
         default: false
         type: boolean
       enable_lxc_docker:
-        description: '启用 LXC / Docker 支持（需配合 KernelSU）'
+        description: '启用 LXC / Docker 支持'
         required: false
         default: false
         type: boolean
@@ -59,7 +59,7 @@ jobs:
           key: build-kernel-oppo-mt6833
           max-size: 2G
 
-      # ========== KernelSU 相关 ==========
+
       - name: KernelSU - 应用 legacy patch
         if: inputs.enable_kernelsu == true
         run: |
@@ -68,14 +68,14 @@ jobs:
           wget https://github.com/rksuorg/kernel_patches/raw/master/manual_hook/kernel-4.14.patch -O ksu-4.14.patch || { echo "下载 patch 失败"; exit 1; }
           patch -p1 < ksu-4.14.patch || { echo "patch 应用失败"; cat ksu-4.14.patch; exit 1; }
 
-      - name: KernelSU - 植入 KSU
+      - name: KernelSU - 集成
         if: inputs.enable_kernelsu == true
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           rm -rf KernelSU
           curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash
 
-      # ========== LXC / Docker 支持 ==========
+
       - name: LXC/Docker - 开启内核配置
         if: inputs.enable_lxc_docker == true
         run: |
@@ -120,7 +120,7 @@ jobs:
           sed -i '/CONFIG_ANDROID_PARANOID_NETWORK/d' android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "# CONFIG_ANDROID_PARANOID_NETWORK is not set" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
-      # ========== KVM 支持 ==========
+
       - name: KVM - 开启配置
         if: inputs.enable_kvm == true
         run: |
@@ -130,14 +130,13 @@ jobs:
           echo "CONFIG_VHOST_NET=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "CONFIG_VHOST_CROSS_ENDIAN_LEGACY=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
-      # ========== 编译内核 ==========
+
       - name: 开始编译内核
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
           export KBUILD_BUILD_HOST=AndroidDeveloper@Android.com
           export KBUILD_BUILD_USER=AndroidDeveloper
-          # 如果启用 LXC/Docker，额外添加 KCFLAGS 忽略特定警告
           if [ "${{ inputs.enable_lxc_docker }}" = "true" ]; then
             KCFLAGS_EXTRA="-Wno-error=sizeof-array-div"
           else
@@ -151,7 +150,7 @@ jobs:
             LD=ld.lld \
             KCFLAGS="$KCFLAGS_EXTRA"
 
-      # ========== 打包 AnyKernel3 ==========
+
       - name: 制作 AnyKernel3 卡刷包
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
@@ -165,4 +164,9 @@ jobs:
           name: AnyKernel.zip
           path: kernel_workspace/AnyKernel3/*
 
-
+          
+      - name: 上传内核镜像
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-Image.gz
+          path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image.gz
