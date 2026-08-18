@@ -49,7 +49,7 @@ static char bl_tb0[] = { 0x51, 0xff };
 extern int __attribute__((weak)) tp_gesture_enable_flag(void) {return 0;};
 extern void __attribute__((weak)) lcd_queue_load_tp_fw(void) {return;};
 extern void __attribute__((weak)) tp_gpio_current_leakage_handler(bool normal) {return;};
-extern bool __attribute__((weak)) tp_boot_mode_normal() {return true;};
+extern bool __attribute__((weak)) tp_boot_mode_normal(void) {return true;};
 extern unsigned long esd_flag;
 static int esd_brightness = 1023;
 extern unsigned long oplus_max_normal_brightness;

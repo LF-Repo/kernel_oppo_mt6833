@@ -257,7 +257,7 @@ int hi556_read_data(u16 addr, u8 *data)
 	last_addr = addr;
 	return read_reg16_data8(0x0108, data);
 }
-void hi556_otp_read_enable()
+void hi556_otp_read_enable(void)
 {
 	write_reg16_data8(0x0a02, 0x01);
 	write_reg16_data8(0x0a00, 0x00);
@@ -270,7 +270,7 @@ void hi556_otp_read_enable()
 	write_reg16_data8(0x003e, 0x10);
 	write_reg16_data8(0x0a00, 0x01);
 }
-void hi556_otp_read_disable()
+void hi556_otp_read_disable(void)
 {
 	write_reg16_data8(0x0a00, 0x00);
 	mdelay(10);

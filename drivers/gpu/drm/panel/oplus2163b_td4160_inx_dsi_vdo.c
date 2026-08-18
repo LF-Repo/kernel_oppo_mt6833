@@ -52,7 +52,7 @@ extern unsigned int __attribute((weak)) is_project(int project)  { return 0; }
 extern unsigned long esd_flag;
 static int esd_brightness = 1023;
 extern void __attribute((weak)) lcd_queue_load_tp_fw(void) { return; };
-extern bool __attribute__((weak)) tp_boot_mode_normal() {return true;};
+extern bool __attribute__((weak)) tp_boot_mode_normal(void) {return true;};
 extern unsigned long oplus_max_normal_brightness;
 extern void __attribute((weak)) disp_aal_set_dre_en(int enable) { return; };
 extern int _20015_lcm_i2c_write_bytes(unsigned char addr, unsigned char value);

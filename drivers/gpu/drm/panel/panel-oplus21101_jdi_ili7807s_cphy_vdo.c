@@ -53,7 +53,7 @@ extern int __attribute__((weak)) tp_gesture_enable_flag(void) {return 0;};
 extern void __attribute__((weak)) lcd_queue_load_tp_fw(void) {return;};
 extern int _20015_lcm_i2c_write_bytes(unsigned char addr, unsigned char value);
 extern void __attribute__((weak)) tp_gpio_current_leakage_handler(bool normal) {return;};
-extern bool __attribute__((weak)) tp_boot_mode_normal() {return true;};
+extern bool __attribute__((weak)) tp_boot_mode_normal(void) {return true;};
 static int backlight_gamma = 0;
 /*****************************************************************************
  * Data Structure
