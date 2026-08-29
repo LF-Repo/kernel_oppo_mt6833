@@ -154,7 +154,7 @@ jobs:
       - name: 制作 AnyKernel3 卡刷包
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
-          git clone -b general https://github.com/sanba0519/AnyKernel3
+          git clone -b master https://github.com/LF-Repo/AnyKernel3
           cp android-kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           rm -rf AnyKernel3/.git* AnyKernel3/README.md
 
