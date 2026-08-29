@@ -47,8 +47,7 @@
 #include <net/inet_ecn.h>
 #include <net/dst_metadata.h>
 
-void udp_v6_early_demux(struct sk_buff *);
-void tcp_v6_early_demux(struct sk_buff *);
+
 static void ip6_rcv_finish_core(struct net *net, struct sock *sk,
 				struct sk_buff *skb)
 {
