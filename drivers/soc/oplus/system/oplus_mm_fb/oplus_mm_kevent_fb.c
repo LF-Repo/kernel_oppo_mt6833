@@ -311,7 +311,6 @@ int upload_mm_fb_kevent_limit(enum OPLUS_MM_DIRVER_FB_EVENT_MODULE module,
                               unsigned int event_id,
                               const char *name,
                               int rate_limit_ms,
-                              unsigned int delay_s,
                               char *payload)
 {
     struct mm_kevent *kevent = NULL;
