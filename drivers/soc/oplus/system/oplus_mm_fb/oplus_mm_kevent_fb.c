@@ -312,12 +312,11 @@ int upload_mm_fb_kevent_limit(enum OPLUS_MM_DIRVER_FB_EVENT_MODULE module,
                               const char *name,
                               int rate_limit_ms,
                               unsigned int delay_s,
-                              char *payload);
-		     const char *name, int rate_limit_ms, unsigned int delay_s, char *payload)
+                              char *payload)
 {
-	struct mm_kevent *kevent = NULL;
-	int size;
-	char buf[MAX_PAYLOAD_DATASIZE] = {0};
+    struct mm_kevent *kevent = NULL;
+    int size;
+    char buf[MAX_PAYLOAD_DATASIZE] = {0};
 
 	if (!mm_fb_init || !mm_kevent_wq) {
 		pr_err("%s: error: not init or mm_kevent_wq is null\n", __func__);
