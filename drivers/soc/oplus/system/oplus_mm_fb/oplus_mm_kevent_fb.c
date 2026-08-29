@@ -350,12 +350,7 @@ int upload_mm_fb_kevent_limit(enum OPLUS_MM_DIRVER_FB_EVENT_MODULE module,
 	}
 	mutex_init(&kevent->lock);
 	INIT_DELAYED_WORK(&kevent->dwork, mm_fb_kevent_upload_work);
-	if (delay_s > 0) {
-		printk(KERN_INFO "%s:feedback delay %d second\n", __func__, delay_s);
-		queue_delayed_work(mm_kevent_wq, &kevent->dwork, delay_s * HZ);
-	} else {
-		queue_delayed_work(mm_kevent_wq, &kevent->dwork, 0);
-	}
+    queue_delayed_work(mm_kevent_wq, &kevent->dwork, 0);
 	printk(KERN_INFO "%s:event_id=%d,payload:%s\n", __func__, event_id, payload);
 
 	return 0;
