@@ -308,7 +308,11 @@ static void mm_fb_kevent_upload_recv_user(int type, int flags, char *data)
 
 /* queue a  delaywork to upload the feedback info, can used in interrupt function or timeliness requirement place*/
 int upload_mm_fb_kevent_limit(enum OPLUS_MM_DIRVER_FB_EVENT_MODULE module,
-			      unsigned int event_id,
+                              unsigned int event_id,
+                              const char *name,
+                              int rate_limit_ms,
+                              unsigned int delay_s,
+                              char *payload);
 		     const char *name, int rate_limit_ms, unsigned int delay_s, char *payload)
 {
 	struct mm_kevent *kevent = NULL;
