@@ -317,43 +317,46 @@ int upload_mm_fb_kevent_limit(enum OPLUS_MM_DIRVER_FB_EVENT_MODULE module,
     int size;
     char buf[MAX_PAYLOAD_DATASIZE] = {0};
 
-	if (!mm_fb_init || !mm_kevent_wq) {
-		pr_err("%s: error: not init or mm_kevent_wq is null\n", __func__);
-		return -EINVAL;
-	}
+    if (!mm_fb_init || !mm_kevent_wq) {
+        pr_err("%s: error: not init or mm_kevent_wq is null\n", __func__);
+        return -EINVAL;
+    }
 
-	if(is_relation_event_limit(event_id)) {
-		pr_info("%s: relation event has feedback before, not feedback %u\n", __func__, event_id);
-		return -EINVAL;
-	}
-	size = strlen(name) + sizeof(*kevent) + 1;
-	kevent = kzalloc(size, GFP_ATOMIC);
-	if (!kevent) {
-		return -ENOMEM;
-	}
+    if (is_relation_event_limit(event_id)) {
+        pr_info("%s: relation event has feedback before, not feedback %u\n", __func__, event_id);
+        return -EINVAL;
+    }
 
-	kevent->module = module;
-	kevent->event_id = event_id;
-	kevent->count_limit = 1;
-	kevent->last_upload = ktime_get();
-	kevent->first = ktime_get();
-	kevent->last = ktime_get();
-	kevent->rate_limit_ms = rate_limit_ms;
-	memcpy(kevent->name, name, strlen(name) + 1);
-	if (OPLUS_AUDIO_EVENTID_ADSP_CRASH == event_id) {
-		calc_fid(payload);
-		scnprintf(buf, MAX_PAYLOAD_DATASIZE, "EventField@@%s$$%s",
-				fid, payload ? payload : "NULL");
-		kevent->payload = kmemdup(buf, strlen(buf) + 1, GFP_ATOMIC);
-	} else {
-		kevent->payload = kmemdup(payload, strlen(payload) + 1, GFP_ATOMIC);
-	}
-	mutex_init(&kevent->lock);
-	INIT_DELAYED_WORK(&kevent->dwork, mm_fb_kevent_upload_work);
+    size = strlen(name) + sizeof(*kevent) + 1;
+    kevent = kzalloc(size, GFP_ATOMIC);
+    if (!kevent)
+        return -ENOMEM;
+
+    kevent->module = module;
+    kevent->event_id = event_id;
+    kevent->count_limit = 1;
+    kevent->last_upload = ktime_get();
+    kevent->first = ktime_get();
+    kevent->last = ktime_get();
+    kevent->rate_limit_ms = rate_limit_ms;
+    memcpy(kevent->name, name, strlen(name) + 1);
+
+    if (OPLUS_AUDIO_EVENTID_ADSP_CRASH == event_id) {
+        calc_fid(payload);
+        scnprintf(buf, MAX_PAYLOAD_DATASIZE, "EventField@@%s$$%s",
+                  fid, payload ? payload : "NULL");
+        kevent->payload = kmemdup(buf, strlen(buf) + 1, GFP_ATOMIC);
+    } else {
+        kevent->payload = kmemdup(payload, strlen(payload) + 1, GFP_ATOMIC);
+    }
+
+    mutex_init(&kevent->lock);
+    INIT_DELAYED_WORK(&kevent->dwork, mm_fb_kevent_upload_work);
+
     queue_delayed_work(mm_kevent_wq, &kevent->dwork, 0);
-	printk(KERN_INFO "%s:event_id=%d,payload:%s\n", __func__, event_id, payload);
 
-	return 0;
+    printk(KERN_INFO "%s:event_id=%d,payload:%s\n", __func__, event_id, payload);
+    return 0;
 }
 EXPORT_SYMBOL(upload_mm_fb_kevent_limit);
 
