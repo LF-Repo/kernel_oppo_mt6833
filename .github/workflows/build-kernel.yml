@@ -3,11 +3,19 @@ name: 编译内核（可配置 KernelSU / LXC-Docker / KVM）
 on:
   workflow_dispatch:
     inputs:
-      enable_kernelsu:
-        description: '启用 KernelSU 支持'
+      SU:
+        type: choice
+        description: "选择要使用的 Root 管理器"
+        required: true
+        default: RKSU
+        options:
+          - RKSU
+          - ReSukiSU
+      SUSFS:
+        type: boolean
+        description: "是否加入 SUSFS（不了解请不要启用）"
         required: false
         default: false
-        type: boolean
       enable_lxc_docker:
         description: '启用 LXC / Docker 支持'
         required: false
@@ -59,22 +67,49 @@ jobs:
           key: build-kernel-oppo-mt6833
           max-size: 2G
 
-
-      - name: KernelSU - 应用 legacy patch
-        if: inputs.enable_kernelsu == true
+      - name: 应用 SU manual hook patch
         run: |
-          echo "KSU_LOG: 开始下载并应用 RKSU 官方 4.14 patch"
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-          wget https://github.com/rksuorg/kernel_patches/raw/master/manual_hook/kernel-4.14.patch -O ksu-4.14.patch || { echo "下载 patch 失败"; exit 1; }
-          patch -p1 < ksu-4.14.patch || { echo "patch 应用失败"; cat ksu-4.14.patch; exit 1; }
+          if [ "${{ github.event.inputs.SU }}" = "RKSU" ]; then
+            echo "KSU_LOG: 选择 RKSU，应用 RKSU 官方 4.14 patch"
+            wget https://github.com/rksuorg/kernel_patches/raw/master/manual_hook/kernel-4.14.patch -O ksu-4.14.patch
+            patch -p1 < ksu-4.14.patch
+          elif [ "${{ github.event.inputs.SU }}" = "ReSukiSU" ]; then
+            if [ "${{ github.event.inputs.SUSFS }}" = "true" ]; then
+              echo "KSU_LOG: ReSukiSU + SUSFS，使用 inline hooks，跳过 manual hook"
+            else
+              echo "KSU_LOG: ReSukiSU 不启用 SUSFS，应用 ReSukiSU 官方 manual hook patch"
+              wget -O resukisu-4.14.patch https://raw.githubusercontent.com/ReSukiSU/ReSukiSU_Patches/main/scope-minimized/kernel-4.14.patch
+              patch -p1 < resukisu-4.14.patch
+            fi
+          fi
 
-      - name: KernelSU - 集成
-        if: inputs.enable_kernelsu == true
+      - name: 应用 SUSFS 补丁
+        if: inputs.SUSFS == true
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+          echo "KSU_LOG: 应用 SUSFS 补丁"
+          wget https://raw.githubusercontent.com/sanba0519/Kernel-patch/refs/heads/main/susfs_patch_to_4.14.patch -O susfs-4.14.patch
+          patch -p1 < susfs-4.14.patch
+          sed -i 's/^orig_flow:$/orig_flow:;/' fs/notify/fdinfo.c
+          grep -q '^orig_flow:;$' fs/notify/fdinfo.c || { echo "SUSFS fdinfo 修正失败"; exit 1; }
+
+      - name: 集成 KernelSU
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           rm -rf KernelSU
-          curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash
-
+          if [ "${{ github.event.inputs.SU }}" = "ReSukiSU" ]; then
+            echo "KSU_LOG: 集成 ReSukiSU"
+            curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
+            if [ "${{ github.event.inputs.SUSFS }}" = "true" ]; then
+              echo "KSU_LOG: 应用 ReSukiSU SUSFS inline hooks"
+              curl -LfsS https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/susfs_inline_hook_patches.sh -o susfs_inline_hook_patches.sh
+              bash susfs_inline_hook_patches.sh
+            fi
+          else
+            echo "KSU_LOG: 集成 RKSU"
+            curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main
+          fi
 
       - name: LXC/Docker - 开启内核配置
         if: inputs.enable_lxc_docker == true
@@ -120,7 +155,6 @@ jobs:
           sed -i '/CONFIG_ANDROID_PARANOID_NETWORK/d' android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "# CONFIG_ANDROID_PARANOID_NETWORK is not set" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
-
       - name: KVM - 开启配置
         if: inputs.enable_kvm == true
         run: |
@@ -130,26 +164,37 @@ jobs:
           echo "CONFIG_VHOST_NET=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
           echo "CONFIG_VHOST_CROSS_ENDIAN_LEGACY=y" >> android-kernel/arch/arm64/configs/PFGM00_defconfig
 
-
       - name: 开始编译内核
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
           export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
           export KBUILD_BUILD_HOST=AndroidDeveloper@Android.com
           export KBUILD_BUILD_USER=AndroidDeveloper
+          make -j$(nproc --all) O=out ARCH=arm64 PFGM00_defconfig
+          if [ "${{ github.event.inputs.SU }}" = "RKSU" ] || [ "${{ github.event.inputs.SU }}" = "ReSukiSU" ]; then
+            ./scripts/config --file out/.config --enable CONFIG_KSU
+            if [ "${{ github.event.inputs.SUSFS }}" = "true" ]; then
+              ./scripts/config --file out/.config --enable CONFIG_KSU_SUSFS --disable CONFIG_KSU_MANUAL_HOOK --disable CONFIG_KSU_TRACEPOINT_HOOK
+            else
+              if [ "${{ github.event.inputs.SU }}" = "ReSukiSU" ]; then
+                ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK --disable CONFIG_KSU_SUSFS --disable CONFIG_KSU_TRACEPOINT_HOOK
+              else
+                ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK --disable CONFIG_KSU_SUSFS --disable CONFIG_KSU_TRACEPOINT_HOOK
+              fi
+            fi
+          fi
+          make O=out ARCH=arm64 olddefconfig
           if [ "${{ inputs.enable_lxc_docker }}" = "true" ]; then
             KCFLAGS_EXTRA="-Wno-error=sizeof-array-div"
           else
             KCFLAGS_EXTRA=""
           fi
-          make -s -j$(nproc --all) O=out ARCH=arm64 PFGM00_defconfig
           make -j$(nproc --all) CC="ccache clang" O=out ARCH=arm64 \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-android- \
             CROSS_COMPILE_ARM32=arm-linux-androideabi- \
             LD=ld.lld \
             KCFLAGS="$KCFLAGS_EXTRA"
-
 
       - name: 制作 AnyKernel3 卡刷包
         run: |
@@ -164,7 +209,6 @@ jobs:
           name: AnyKernel.zip
           path: kernel_workspace/AnyKernel3/*
 
-          
       - name: 上传内核镜像
         uses: actions/upload-artifact@v4
         with:
